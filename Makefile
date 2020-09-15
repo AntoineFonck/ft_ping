@@ -18,13 +18,14 @@ LIBFT = $(LIBFT_DIRECTORY)libft.a
 LIBFT_DIRECTORY = ./libft/
 LIBFT_HEADER = $(LIBFT_DIRECTORY)
 
-#HEADERS_LIST = .h \
+HEADERS_LIST = ft_ping.h \
 
 HEADERS_DIRECTORY = ./includes/
 HEADERS = $(addprefix $(HEADERS_DIRECTORY), $(HEADERS_LIST))
 
 SOURCES_DIRECTORY = ./src/
 SOURCES_LIST = main.c \
+	       resolve_hostname.c
 
 SOURCES = $(addprefix $(SOURCES_DIRECTORY), $(SOURCES_LIST))
 

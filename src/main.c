@@ -1,12 +1,15 @@
 #include "libft.h"
+#include "ft_ping.h"
 
 int main(int argc, char *argv[])
 {
-	if (argc != 2)
+	char ip[16];
+	if (argc != 2 || ft_strstr(argv[1], "-h") != NULL)
 	{
-		(void)argv;
-		ft_printf("nope, %{r}s\n", "bad");
-		return(1);
+		ft_dprintf(STDERR_FILENO, "Usage: ft_ping %{g}s\n", "destination");
+		return(0);
 	}
+	hostname_to_ip(argv[1], ip);
+	ft_dprintf(STDERR_FILENO, "ip of %s is %s\n", argv[1], ip);
 	return(0);
 }
