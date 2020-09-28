@@ -4,7 +4,7 @@
 #include <netdb.h>
 #include <arpa/inet.h>
 
-int hostname_to_ip(char *hostname, char *ip)
+int hostname_to_ip(char *hostname, struct in_addr *ip)
 {
 	int			status;
 	struct addrinfo		hints;
@@ -24,7 +24,9 @@ int hostname_to_ip(char *hostname, char *ip)
 	while (servinfo)
 	{
 		ipv4 = (struct sockaddr_in *)servinfo->ai_addr;
-		inet_ntop(servinfo->ai_family, &(ipv4->sin_addr), ip, 16); 
+		ip->s_addr = ipv4->sin_addr.s_addr;
+		ft_printf("ipv4 addr len = %d\n", servinfo->ai_addrlen);
+		//inet_ntop(servinfo->ai_family, &(ipv4->sin_addr), ip->ai_addr, 16); 
 		servinfo = servinfo->ai_next;
 	}
 	freeaddrinfo(servinfo);
