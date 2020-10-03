@@ -21,14 +21,14 @@ int hostname_to_ip(char *hostname, struct in_addr *ip)
 		ft_dprintf(STDERR_FILENO, "ft_ping: %s: %{r}s\n", hostname, gai_strerror(status));
 		exit(2);
 	}
-	while (servinfo)
-	{
+	//while (servinfo)
+	//{
 		ipv4 = (struct sockaddr_in *)servinfo->ai_addr;
 		ip->s_addr = ipv4->sin_addr.s_addr;
 		ft_printf("ipv4 addr len = %d\n", servinfo->ai_addrlen);
 		//inet_ntop(servinfo->ai_family, &(ipv4->sin_addr), ip->ai_addr, 16); 
-		servinfo = servinfo->ai_next;
-	}
+	//	servinfo = servinfo->ai_next;
+	//}
 	freeaddrinfo(servinfo);
 	return (0);
 }
