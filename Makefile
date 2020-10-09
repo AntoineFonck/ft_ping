@@ -7,7 +7,7 @@ CFLAGS = -Wall -Werror -Wextra
 DEBUGFLAGS = -Wall -Werror -Wextra -g
 
 LDFLAGS = -L$(LIBFT_DIRECTORY)
-LDLIBS = -lft
+LDLIBS = -lft -lm
 
 INCLUDES = -I$(HEADERS_DIRECTORY) -I$(LIBFT_HEADER)
 HARD_DBG ?= 1
