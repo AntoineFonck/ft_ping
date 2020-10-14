@@ -19,13 +19,28 @@ LIBFT_DIRECTORY = ./libft/
 LIBFT_HEADER = $(LIBFT_DIRECTORY)
 
 HEADERS_LIST = ft_ping.h \
+			flags.h \
+			ping_rawsocket.h \
+			display.h \
+			stats_calculations.h \
+			init.h \
+			utils.h \
+			prepare_echorequest.h
 
 HEADERS_DIRECTORY = ./includes/
 HEADERS = $(addprefix $(HEADERS_DIRECTORY), $(HEADERS_LIST))
 
 SOURCES_DIRECTORY = ./src/
 SOURCES_LIST = main.c \
-	       resolve_hostname.c
+	       resolve_hostname.c \
+		   handle_flags.c \
+		   ping_rawsocket.c \
+		   display.c \
+		   stats_calculations.c \
+		   init.c \
+		   utils.c \
+		   options.c \
+		   prepare_echorequest.c
 
 SOURCES = $(addprefix $(SOURCES_DIRECTORY), $(SOURCES_LIST))
 

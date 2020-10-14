@@ -1,8 +1,6 @@
 #include "libft.h"
-#include <sys/types.h>
-#include <sys/socket.h>
+
 #include <netdb.h>
-#include <arpa/inet.h>
 
 int hostname_to_ip(char *hostname, struct in_addr *ip)
 {

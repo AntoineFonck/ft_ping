@@ -1,9 +1,9 @@
 #ifndef FT_PING_H
 # define FT_PING_H
 
-# include <netdb.h>
+# define MAX_PACKET_SIZE 1028
 
-int hostname_to_ip(char *hostname, struct in_addr *ip);
+# include <netdb.h>
 
 typedef struct          s_options
 {
@@ -38,5 +38,9 @@ typedef struct          s_singleping_stats
 	int                 id_icmp;
 	int                 seq_icmp;
 }                       t_singleping_stats;
+
+int						hostname_to_ip(char *hostname, struct in_addr *ip);
+
+int						parse_options(int argc, char *argv[], t_options *options);
 
 #endif
