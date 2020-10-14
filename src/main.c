@@ -62,6 +62,8 @@ void receive_pong(int sockfd, char *packet, t_singleping_stats *singleping_stats
 	if (is_flag_on(global_flags, FLAG_F) == 0)	// if flood flag is off
 		alarm(options->interval);				// launch alarm to wait for the reply
 	singleping_stats->nb_bytes_received = receive_echo_reply(sockfd, packet, options);
+	while (is_icmp_type(packet, 8)) // skip receiving echo requests (in case of loopback ping for example)
+		singleping_stats->nb_bytes_received = receive_echo_reply(sockfd, packet, options);
 	gettimeofday(&(singleping_stats->tv_end_rtt), NULL); // end of timer for RTT calculations
 }
 

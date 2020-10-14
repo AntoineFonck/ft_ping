@@ -12,4 +12,6 @@ int         ping_continue(t_options *options, t_fullping_stats *fullping_stats);
 
 void        error_exit(char *errorstr);
 
+int         is_icmp_type(char *packet, int icmp_type);
+
 #endif

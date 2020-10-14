@@ -1,5 +1,7 @@
 #include "ft_ping.h"
 #include "display.h"
+#include "utils.h"
+	
 #include <sys/time.h>
 #include <math.h>
 

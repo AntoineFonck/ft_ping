@@ -3,6 +3,7 @@
 #include "flags.h"
 
 #include <signal.h>
+#include <netinet/ip_icmp.h>
 
 uint16_t inet_checksum(void *addr, int count)
 {
@@ -71,4 +72,15 @@ void error_exit(char *errorstr)
 {
 	ft_dprintf(STDERR_FILENO, "ft_ping: %{r}s\n", errorstr);
 	exit(2);
+}
+
+int is_icmp_type(char *packet, int icmp_type)
+{
+	struct icmp *icmp;
+
+	icmp = (struct icmp *)(packet + sizeof(struct ip));
+	if (icmp->icmp_type == icmp_type) 
+		return (1);
+	else
+		return (0);
 }

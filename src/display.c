@@ -92,8 +92,6 @@ int print_packet_stats(char *packet, int nb_bytes_rcvd, int seq_icmp, double dur
 		print_destination_unreachable(str_ip, icmp, seq_icmp);
 	else if (icmp->icmp_type == 11)
 		print_time_exceeded(str_ip, icmp, seq_icmp);
-	else
-		ft_printf("From %s icmp_seq=%d ICMP type %d not supported\n", str_ip, seq_icmp, icmp->icmp_type);
 	if (is_flag_on(global_flags, FLAG_V) && icmp->icmp_type != 0)
 	{
 		ft_printf("Verbose error details for received packet with icmp_seq=%d: "
