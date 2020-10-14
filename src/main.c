@@ -19,6 +19,8 @@
 //sqrt
 #include <math.h>
 
+#define MAX_PACKET_SIZE 1028
+
 enum e_flags
 {
 	FLAG_V = 1 << 0,
@@ -110,7 +112,7 @@ uint16_t inet_checksum(void *addr, int count)
 
 int send_echo_request(int sockfd, struct sockaddr_in *ip, char *packet, t_options *options)
 {
-	if (sendto(sockfd, packet, sizeof(struct ip) + 8 + options->icmp_datasize, 0, (struct sockaddr *)ip, sizeof(*ip)) == -1)
+	if (sendto(sockfd, packet, sizeof(struct ip) + sizeof(struct icmphdr) + options->icmp_datasize, 0, (struct sockaddr *)ip, sizeof(*ip)) == -1)
 	{
 		ft_dprintf(STDERR_FILENO, "sendto error %{r}s\n", strerror(errno));
 		exit(1);
@@ -125,9 +127,9 @@ int	receive_echo_reply(int sockfd, char *packet, t_options *options)
 	struct iovec iovec[1];
 	struct msghdr msghdr;
 
-	ft_bzero(packet, sizeof(struct ip) + 8 + options->icmp_datasize);
+	ft_bzero(packet, sizeof(struct ip) + sizeof(struct icmphdr) + options->icmp_datasize);
 	iovec[0].iov_base = packet;
-	iovec[0].iov_len = sizeof(struct ip) + 8 + options->icmp_datasize;
+	iovec[0].iov_len = sizeof(struct ip) + sizeof(struct icmphdr) + options->icmp_datasize;
 
 	msghdr.msg_name = NULL;
 	msghdr.msg_namelen = sizeof(struct sockaddr_in);
@@ -136,7 +138,6 @@ int	receive_echo_reply(int sockfd, char *packet, t_options *options)
 
 	if ((nb_bytes_rcvd = recvmsg(sockfd, &msghdr, MSG_WAITALL)) == -1)
 	{
-		//ft_dprintf(STDERR_FILENO, "recvmsg error %{r}s\n", strerror(errno));
 		if (is_flag_on(global_flags, FLAG_V))
 			ft_dprintf(STDERR_FILENO, "Timeout for receiving echo reply\n");
 	}
@@ -151,7 +152,7 @@ void fill_icmpdatapattern(char *packet, char pattern, int nb_bytes_tofill)
 
 	if (pattern == 0)
 		return ;
-	icmpdata_ptr = packet + sizeof(struct ip) + 8;
+	icmpdata_ptr = packet + sizeof(struct ip) + sizeof(struct icmphdr);
 	while (nb_bytes_tofill > 0)
 	{
 		*icmpdata_ptr = pattern;
@@ -160,33 +161,43 @@ void fill_icmpdatapattern(char *packet, char pattern, int nb_bytes_tofill)
 	}
 }
 
-int	prepare_echo_request_packet(char *packet, struct sockaddr_in *target_ip, int id_icmp, int seq_icmp, t_options *options)
+void fill_ip_header(struct ip *ip, struct sockaddr_in *target_ip, t_options *options)
+{	
+	ip->ip_hl = 0x5; //5 x 32 bits = 20 bytes (ip basic header size)
+	ip->ip_v = 0x4;
+	ip->ip_tos = 0x0;
+	ip->ip_len = htons(sizeof(struct ip) + sizeof(struct icmphdr) + options->icmp_datasize); //20 bytes ip header + 8 bytes icmp header + icmp data bytes (default=56)
+	ip->ip_id = 0x0;
+	ip->ip_off = 0x0 | ntohs(IP_DF);
+	ip->ip_ttl = options->ttl;
+	ip->ip_p = IPPROTO_ICMP;
+	ip->ip_sum = 0x0;
+	ip->ip_src.s_addr = options->source_ip.s_addr;
+	ip->ip_dst.s_addr = target_ip->sin_addr.s_addr;
+	ip->ip_sum = inet_checksum(ip, sizeof(ip));
+}
+
+void fill_icmp_header(struct icmp *icmp, t_singleping_stats *singleping_stats)
+{
+	icmp->icmp_type = ICMP_ECHO;
+	icmp->icmp_code = 0;
+	icmp->icmp_hun.ih_idseq.icd_id = htons(singleping_stats->id_icmp);
+	icmp->icmp_hun.ih_idseq.icd_seq = htons(singleping_stats->seq_icmp);
+	icmp->icmp_cksum = inet_checksum(icmp, sizeof(icmp));
+}
+
+int	prepare_echo_request_packet(char *packet, struct sockaddr_in *target_ip, t_singleping_stats *singleping_stats,/*int id_icmp, int seq_icmp,*/ t_options *options)
 {
 	struct ip ip;
 	struct icmp icmp;
 
-	ft_bzero(packet, sizeof(struct ip) + 8 + options->icmp_datasize);
+	ft_bzero(packet, sizeof(struct ip) + sizeof(struct icmphdr) + options->icmp_datasize);
 	ft_bzero(&ip, sizeof(ip));
 	ft_bzero(&icmp, sizeof(icmp));
-	ip.ip_hl = 0x5; //5 x 32 bits = 20 bytes (ip basic header size)
-	ip.ip_v = 0x4;
-	ip.ip_tos = 0x0;
-	ip.ip_len = htons(sizeof(struct ip) + 8 + options->icmp_datasize); //20 bytes ip header + 8 bytes icmp header + 56 bytes icmp data
-	ip.ip_id = 0x0;
-	ip.ip_off = 0x0 | ntohs(IP_DF);
-	ip.ip_ttl = options->ttl;
-	ip.ip_p = IPPROTO_ICMP;
-	ip.ip_sum = 0x0;
-	ip.ip_src.s_addr = options->source_ip.s_addr;
-	ip.ip_dst.s_addr = target_ip->sin_addr.s_addr;
-	ip.ip_sum = inet_checksum(&ip, sizeof(ip));
+	fill_ip_header(&ip, target_ip, options);
 	ft_memcpy(packet, &ip, sizeof(ip));
 
-	icmp.icmp_type = ICMP_ECHO;
-	icmp.icmp_code = 0;
-	icmp.icmp_hun.ih_idseq.icd_id = htons(id_icmp);
-	icmp.icmp_hun.ih_idseq.icd_seq = htons(seq_icmp);
-	icmp.icmp_cksum = inet_checksum(&icmp, sizeof(icmp));
+	fill_icmp_header(&icmp, singleping_stats);
 	ft_memcpy(packet + sizeof(ip), &icmp, sizeof(icmp));
 	fill_icmpdatapattern(packet, options->pattern, options->icmp_datasize);
 	return(0);
@@ -281,7 +292,7 @@ int print_start_info(struct sockaddr_in *target_ip, char *hostname, t_options *o
 
 	inet_ntop(AF_INET, &(target_ip->sin_addr), str_ip, INET_ADDRSTRLEN);
 	ft_printf("PING %s (%s) %d(%d) bytes of data.\n", hostname, str_ip, options->icmp_datasize, \
-	sizeof(struct ip) + 8 + options->icmp_datasize);
+	sizeof(struct ip) + sizeof(struct icmphdr) + options->icmp_datasize);
 	return (0);
 }
 
@@ -311,34 +322,53 @@ void print_rtt_stats(double min_rtt, double max_rtt, double sum_duration, int nb
 	double average;
 	double std_deviation;
 
+	if (nb_packets_received == 0)
+		return ;
 	average = get_average(sum_duration, nb_packets_received);
 	std_deviation = get_std_deviation(average, sum_duration_stddev, nb_packets_received);
 	ft_printf("rtt min/avg/max/mdev = %.3f/%.3f/%.3f/%.3f ms\n", min_rtt, \
 	average, max_rtt, std_deviation);
 }
 
-int	print_end_statistics(int nb_packets_sent, int nb_packets_received, int nb_packets_error, struct timeval *tv_start_ping, double min_rtt, double max_rtt, double sum_duration, double sum_duration_stddev)
+void print_end_error(t_fullping_stats *fullping_stats, int percent_loss, double full_duration)
+{
+	ft_printf("%d packets transmitted, %d received, +%d errors, %d%% packet loss, time %.3fs\n", \
+	fullping_stats->nb_packets_sent, fullping_stats->nb_packets_received, fullping_stats->nb_packets_error, \
+	percent_loss, full_duration);
+}
+
+void print_end_normal(t_fullping_stats *fullping_stats, int percent_loss, double full_duration)
+{
+	ft_printf("%d packets transmitted, %d received, %d%% packet loss, time %.3fs\n", \
+	fullping_stats->nb_packets_sent, fullping_stats->nb_packets_received, percent_loss, full_duration);
+	print_rtt_stats(fullping_stats->min_rtt, fullping_stats->max_rtt, fullping_stats->sum_duration, \
+	fullping_stats->nb_packets_received, fullping_stats->sum_duration_stddev);
+}
+
+int calculate_percentloss(unsigned int nb_packets_sent, unsigned int nb_packets_received)
 {
 	int percent_loss;
-	double full_duration;
-	struct timeval tv_end_ping;
 
-	gettimeofday(&tv_end_ping, NULL);
-	full_duration = calculate_msduration(tv_start_ping, &tv_end_ping) / 1000;
 	if (nb_packets_sent == 0)
 		percent_loss = 0;
 	else
 		percent_loss = (1 - ((double)nb_packets_received/(double)nb_packets_sent)) * 100;
-	ft_printf("\n--- ping statistics ---\n");
-	if (nb_packets_error != 0)
-		ft_printf("%d packets transmitted, %d received, +%d errors, %d%% packet loss, time %.3fs\n", \
-		nb_packets_sent, nb_packets_received, nb_packets_error, percent_loss, full_duration);
+	return (percent_loss);
+}
+
+int	print_end_statistics(t_fullping_stats *fullping_stats, char *hostname)
+{
+	int percent_loss;
+	double full_duration;
+
+	gettimeofday(&(fullping_stats->tv_end_ping), NULL);
+	full_duration = calculate_msduration(&(fullping_stats->tv_start_ping), &(fullping_stats->tv_end_ping)) / 1000;
+	percent_loss = calculate_percentloss(fullping_stats->nb_packets_sent, fullping_stats->nb_packets_received);
+	ft_printf("\n--- %s ping statistics ---\n", hostname);
+	if (fullping_stats->nb_packets_error != 0)
+		print_end_error(fullping_stats, percent_loss, full_duration);
 	else
-	{
-		ft_printf("%d packets transmitted, %d received, %d%% packet loss, time %.3fs\n", \
-		nb_packets_sent, nb_packets_received, percent_loss, full_duration);
-		print_rtt_stats(min_rtt, max_rtt, sum_duration, nb_packets_received, sum_duration_stddev);
-	}
+		print_end_normal(fullping_stats, percent_loss, full_duration);
 	return (0);
 }
 
@@ -359,85 +389,110 @@ void get_minmax_rtt(double duration, double *min_rtt, double *max_rtt)
 		*max_rtt = duration;
 }
 
-int ping_loop(struct sockaddr_in *target_ip, char *packet, t_options *options)
+void init_fullping_stats(t_fullping_stats *fullping_stats)
 {
-	int sockfd;
+	gettimeofday(&(fullping_stats->tv_start_ping), NULL);
+	fullping_stats->min_rtt = 0.0;
+	fullping_stats->max_rtt = 0.0;
+	fullping_stats->sum_duration = 0.0;
+	fullping_stats->sum_duration_stddev = 0.0;
+	fullping_stats->nb_packets_sent = 0;
+	fullping_stats->nb_packets_received = 0;
+	fullping_stats->nb_packets_error = 0;
+}
 
-	int id_icmp;
-	int seq_icmp;
+void init_singleping_stats(t_singleping_stats *singleping_stats)
+{
+	singleping_stats->duration = 0.0;
+	singleping_stats->nb_bytes_received = 0;
+	singleping_stats->id_icmp = getpid() & 0xFFFF;
+	singleping_stats->seq_icmp = 1;
+}
 
-	struct timeval tv_start_ping; 
-	struct timeval tv_start_rtt;
-	struct timeval tv_end_rtt;
-	double			duration;
-	double			sum_duration;
-	double			sum_duration_stddev;
-	double			min_rtt;
-	double			max_rtt;
-	gettimeofday(&tv_start_ping, NULL);
-	min_rtt = 0.0;
-	max_rtt = 0.0;
-	duration = 0.0;
-	sum_duration = 0.0;
-	sum_duration_stddev = 0.0;
-
-	int nb_bytes_received;
-	nb_bytes_received = 0;
-
-	unsigned int nb_packets_sent;
-	unsigned int nb_packets_received;
-	unsigned int nb_packets_error;
-	nb_packets_sent = 0;
-	nb_packets_received = 0;
-	nb_packets_error = 0;
-
-	id_icmp = getpid() & 0xFFFF;
-	seq_icmp = 1;
-
+void init_signals_handler()
+{
 	signal(SIGALRM, sig_handler);
 	signal(SIGINT, sig_handler);
+}
+
+void send_ping(int sockfd, char *packet, struct sockaddr_in *target_ip, t_singleping_stats *singleping_stats, t_options *options, t_fullping_stats *fullping_stats)
+{
+	prepare_echo_request_packet(packet, target_ip, singleping_stats, options);
+	gettimeofday(&(singleping_stats->tv_start_rtt), NULL); // start of timer for RTT calculations
+	send_echo_request(sockfd, target_ip, packet, options);
+	fullping_stats->nb_packets_sent++;
+}
+
+void receive_pong(int sockfd, char *packet, t_singleping_stats *singleping_stats, t_options *options)
+{
+	if (is_flag_on(global_flags, FLAG_F) == 0)	// if flood flag is off
+		alarm(options->interval);				// launch alarm to wait for the reply
+	singleping_stats->nb_bytes_received = receive_echo_reply(sockfd, packet, options);
+	gettimeofday(&(singleping_stats->tv_end_rtt), NULL); // end of timer for RTT calculations
+}
+
+void wait_interval()
+{
+	if (is_flag_on(global_flags, FLAG_F) == 0)
+	{
+		while (is_flag_on(global_flags, FLAG_SIGALRM | FLAG_SIGINT) == 0)
+			;
+	}
+	deactivate_flag(&global_flags, FLAG_SIGALRM);
+}
+
+int ping_continue(t_options *options, t_fullping_stats *fullping_stats)
+{
+	if (is_flag_on(global_flags, FLAG_SIGINT) == 1 \
+	|| check_stop_ping(options, fullping_stats->nb_packets_sent) == 1)
+		return (0);
+	else
+		return (1);
+}
+
+void handle_stats(char *packet, t_singleping_stats *singleping_stats, t_fullping_stats *fullping_stats)
+{
+	if (singleping_stats->nb_bytes_received >= 0)
+	{
+		singleping_stats->duration = calculate_msduration(&(singleping_stats->tv_start_rtt), &(singleping_stats->tv_end_rtt));
+		fullping_stats->sum_duration += singleping_stats->duration;
+		fullping_stats->sum_duration_stddev += singleping_stats->duration * singleping_stats->duration;
+		if (fullping_stats->nb_packets_sent == 1)
+		{
+			fullping_stats->min_rtt = singleping_stats->duration;
+			fullping_stats->max_rtt = singleping_stats->duration;
+		}
+		if (print_packet_stats(packet, singleping_stats->nb_bytes_received, singleping_stats->seq_icmp, singleping_stats->duration) == 0)
+		{
+			get_minmax_rtt(singleping_stats->duration, &(fullping_stats->min_rtt), &(fullping_stats->max_rtt));
+			fullping_stats->nb_packets_received++;
+		}
+		else
+			fullping_stats->nb_packets_error++;
+	}
+}
+
+int ping_loop(struct sockaddr_in *target_ip, t_fullping_stats *fullping_stats, t_options *options)
+{
+	int sockfd;
+	char packet[MAX_PACKET_SIZE];
+	t_singleping_stats singleping_stats;
+
+	init_fullping_stats(fullping_stats);
+	init_singleping_stats(&singleping_stats);
+	init_signals_handler();
 
 	sockfd = create_socket();
 	setup_socket(sockfd, options);
-	while (is_flag_on(global_flags, FLAG_SIGINT) == 0 && check_stop_ping(options, nb_packets_sent) == 0)
+	while (ping_continue(options, fullping_stats) == 1)
 	{
-		prepare_echo_request_packet(packet, target_ip, id_icmp, seq_icmp, options);
-		gettimeofday(&tv_start_rtt, NULL);
-		send_echo_request(sockfd, target_ip, packet, options);
-		nb_packets_sent++;
-		if (is_flag_on(global_flags, FLAG_F) == 0)
-			alarm(options->interval);
-		nb_bytes_received = receive_echo_reply(sockfd, packet, options);
-		gettimeofday(&tv_end_rtt, NULL);
-		if (nb_bytes_received >= 0)
-		{
-			duration = calculate_msduration(&tv_start_rtt, &tv_end_rtt);
-			sum_duration += duration;
-			sum_duration_stddev += duration * duration;
-			if (nb_packets_sent == 1)
-			{
-				min_rtt = duration;
-				max_rtt = duration;
-			}
-			if (print_packet_stats(packet, nb_bytes_received, seq_icmp, duration) == 0)
-			{
-				get_minmax_rtt(duration, &min_rtt, &max_rtt);
-				nb_packets_received++;
-			}
-			else
-				nb_packets_error++;
-		}
-		if (is_flag_on(global_flags, FLAG_F) == 0)
-		{
-			while (is_flag_on(global_flags, FLAG_SIGALRM | FLAG_SIGINT) == 0)
-				;
-		}
-		deactivate_flag(&global_flags, FLAG_SIGALRM);
-		seq_icmp++;
+		send_ping(sockfd, packet, target_ip, &singleping_stats, options, fullping_stats);
+		receive_pong(sockfd, packet, &singleping_stats, options);
+		handle_stats(packet, &singleping_stats, fullping_stats);
+		wait_interval();
+		singleping_stats.seq_icmp++;
 	}
-	print_end_statistics(nb_packets_sent, nb_packets_received, nb_packets_error, &tv_start_ping, min_rtt, max_rtt, sum_duration, sum_duration_stddev);
 	return (0);
-
 }
 
 void init_options(t_options *options)
@@ -509,7 +564,7 @@ int parse_options(int argc, char *argv[], t_options *options)
 	else if (opt == 'q')
 		activate_flag(&global_flags, FLAG_Q);
 	else if (opt == 's')
-		(ft_atoi(optarg) >= 0 && ft_atoi(optarg) <= 1000) ? options->icmp_datasize = ft_atoi(optarg) \
+		(ft_atoi(optarg) >= 0 && ft_atoi(optarg) + sizeof(struct ip) + sizeof(struct icmphdr) <= MAX_PACKET_SIZE) ? options->icmp_datasize = ft_atoi(optarg) \
 		: error_exit("invalid icmp data size");
 	else if (opt == 'S')
 	{
@@ -535,10 +590,9 @@ int parse_options(int argc, char *argv[], t_options *options)
 int main(int argc, char *argv[])
 {
 	int target_argindex;
-	struct sockaddr_in target_ip;
+	struct sockaddr_in	target_ip;
+	t_fullping_stats	fullping_stats;
 	t_options options;	
-	//char packet[PACKET_SIZE]; //with ip
-	char packet[1028];
 
 	target_ip.sin_family = AF_INET;
 	if (getuid() != 0)
@@ -552,6 +606,7 @@ int main(int argc, char *argv[])
 		error_exit("No destination !");
 	hostname_to_ip(argv[target_argindex], &(target_ip.sin_addr));
 	print_start_info(&target_ip, argv[target_argindex], &options);
-	ping_loop(&target_ip, packet, &options);
+	ping_loop(&target_ip, &fullping_stats, &options);
+	print_end_statistics(&fullping_stats, argv[target_argindex]);
 	return(0);
 }
